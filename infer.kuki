@@ -29,8 +29,9 @@
 
 petiole infer
 
-import "stdlib/errors"
+import "stdlib/errors" as errs
 import "stdlib/ort"
+import "stdlib/slice"
 import "stdlib/webinfer"
 
 # Env holds the active backend and its environment handle.
@@ -81,33 +82,33 @@ type IOInfo
 # then browser-based inference, then returns an error.
 func Init() (Env, error)
     nEnv, nErr := ort.Init()
-    if nErr == empty
-        return Env{backend: "native", nativeEnv: nEnv}, empty
+    if nErr equals empty
+        return {backend: "native", nativeEnv: nEnv}, empty
     wEnv, wErr := webinfer.Init()
-    if wErr == empty
-        return Env{backend: "web", webEnv: wEnv}, empty
-    return Env{}, errors.New("no inference backend available (native: {nErr}, web: {wErr})")
+    if wErr equals empty
+        return {backend: "web", webEnv: wEnv}, empty
+    return {}, error "no inference backend available (native: {nErr}, web: {wErr})"
 
 # InitWith creates an Env using an explicit backend ("native" or "web").
 func InitWith(backend string) (Env, error)
-    if backend == "native"
+    if backend equals "native"
         nEnv, err := ort.Init()
-        if err != empty
-            return Env{}, errors.Wrap(err, "native backend init")
-        return Env{backend: "native", nativeEnv: nEnv}, empty
-    if backend == "web"
+        if err isnt empty
+            return {}, errs.Wrap(err, "native backend init")
+        return {backend: "native", nativeEnv: nEnv}, empty
+    if backend equals "web"
         wEnv, err := webinfer.Init()
-        if err != empty
-            return Env{}, errors.Wrap(err, "web backend init")
-        return Env{backend: "web", webEnv: wEnv}, empty
-    return Env{}, errors.New("unknown backend: {backend} (use \"native\" or \"web\")")
+        if err isnt empty
+            return {}, errs.Wrap(err, "web backend init")
+        return {backend: "web", webEnv: wEnv}, empty
+    return {}, error "unknown backend: {backend} (use \"native\" or \"web\")"
 
 # Cleanup releases the backend environment resources.
 func Cleanup(env Env) error
-    if env.backend == "native"
+    if env.backend equals "native"
         nEnv := env.nativeEnv.(ort.Env)
         return ort.Cleanup(nEnv)
-    if env.backend == "web"
+    if env.backend equals "web"
         wEnv := env.webEnv.(webinfer.Env)
         return webinfer.Cleanup(wEnv)
     return empty
@@ -118,9 +119,9 @@ func Backend(env Env) string
 
 # Version returns the runtime version string for the active backend.
 func Version(env Env) string
-    if env.backend == "native"
+    if env.backend equals "native"
         return ort.Version()
-    if env.backend == "web"
+    if env.backend equals "web"
         wEnv := env.webEnv.(webinfer.Env)
         return webinfer.Version(wEnv)
     return ""
@@ -141,7 +142,7 @@ func IsWebAvailable() bool
 
 # New creates a default configuration builder.
 func New() Config
-    return Config{}
+    return {}
 
 # Threads sets the intra-op thread count (native only; ignored on web).
 func Threads(cfg Config, n int) Config
@@ -170,7 +171,7 @@ func EP(cfg Config, ep string) Config
 
 # Load creates an inference session from a model file using the active backend.
 func Load(cfg Config, env Env, path string, inputNames list of string, outputNames list of string, inputs list of Tensor, outputs list of Tensor) (Model, error)
-    return Model{}, errors.New("stub: use external module github.com/kukichalang/infer")
+    return {}, error "stub: use external module github.com/kukichalang/infer"
 
 # Close destroys the model session for the active backend.
 func Close(model Model) error
@@ -180,32 +181,29 @@ func Close(model Model) error
 
 # Run executes inference on the active backend.
 func Run(model Model) error
-    return errors.New("stub: use external module github.com/kukichalang/infer")
+    return error "stub: use external module github.com/kukichalang/infer"
 
 # --- Tensor creation ---
 
 # Shape builds an int64 shape slice from the given dimensions.
 func Shape(many dims int64) list of int64
-    result := make(list of int64, len(dims))
-    for i from 0 to len(dims)
-        result[i] = dims[i]
-    return result
+    return dims
 
 # NewFloat32 creates a float32 tensor using the active backend.
 func NewFloat32(env Env, shape list of int64, data list of float32) (Tensor, error)
-    return Tensor{}, errors.New("stub: use external module github.com/kukichalang/infer")
+    return {}, error "stub: use external module github.com/kukichalang/infer"
 
 # ZeroFloat32 creates a zeroed float32 tensor using the active backend.
 func ZeroFloat32(env Env, shape list of int64) (Tensor, error)
-    return Tensor{}, errors.New("stub: use external module github.com/kukichalang/infer")
+    return {}, error "stub: use external module github.com/kukichalang/infer"
 
 # NewInt64 creates an int64 tensor using the active backend.
 func NewInt64(env Env, shape list of int64, data list of int64) (Tensor, error)
-    return Tensor{}, errors.New("stub: use external module github.com/kukichalang/infer")
+    return {}, error "stub: use external module github.com/kukichalang/infer"
 
 # ZeroInt64 creates a zeroed int64 tensor using the active backend.
 func ZeroInt64(env Env, shape list of int64) (Tensor, error)
-    return Tensor{}, errors.New("stub: use external module github.com/kukichalang/infer")
+    return {}, error "stub: use external module github.com/kukichalang/infer"
 
 # Destroy releases the underlying tensor memory.
 func Destroy(tensor Tensor) error
@@ -233,15 +231,15 @@ func Dtype(tensor Tensor) string
 
 # Inspect reads model metadata from an ONNX file. Only supported on native backend.
 func Inspect(env Env, path string) (ModelInfo, error)
-    return ModelInfo{}, errors.New("stub: use external module github.com/kukichalang/infer")
+    return {}, error "stub: use external module github.com/kukichalang/infer"
 
 # InputNames returns the input names from a ModelInfo.
 func InputNames(info ModelInfo) list of string
-    return make(list of string, 0)
+    return info.inputs |> slice.Map(i => i.Name)
 
 # OutputNames returns the output names from a ModelInfo.
 func OutputNames(info ModelInfo) list of string
-    return make(list of string, 0)
+    return info.outputs |> slice.Map(i => i.Name)
 
 # GraphName returns the graph name from a ModelInfo.
 func GraphName(info ModelInfo) string
