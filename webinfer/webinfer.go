@@ -4,8 +4,8 @@ package webinfer
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
+	kukijson "github.com/kukichalang/kukicha/stdlib/json"
 	"github.com/kukichalang/infer/internal/errors"
 	playwright "github.com/playwright-community/playwright-go"
 	"os"
@@ -178,11 +178,11 @@ func Run(model Model) error {
 			feeds[name] = FeedEntry{Dtype: "float32", Shape: t.shape, Data: t.float32Data}
 		}
 	}
-	feedsJSON, marshalErr := json.Marshal(feeds)
+	feedsJSON, marshalErr := kukijson.Marshal(feeds)
 	if marshalErr != nil {
 		return fmt.Errorf("marshal feeds: %w", marshalErr)
 	}
-	outNamesJSON, _ := json.Marshal(model.outputNames)
+	outNamesJSON, _ := kukijson.Marshal(model.outputNames)
 	js := fmt.Sprintf("async () => { const session = window.__kuki[%q]; const feedData = %s; const feeds = {}; for (const [name, info] of Object.entries(feedData)) { feeds[name] = new ort.Tensor(info.dtype, new Float32Array(info.data), info.shape); } const results = await session.run(feeds); const outNames = %s; const outputs = {}; for (const name of outNames) { const t = results[name]; if (t) outputs[name] = { dtype: t.type, shape: Array.from(t.dims), data: Array.from(t.data) }; } return JSON.stringify(outputs); }", model.sessionID, string(feedsJSON), string(outNamesJSON))
 	raw, evalErr := model.env.page.Evaluate(js)
 	if evalErr != nil {
@@ -193,7 +193,7 @@ func Run(model Model) error {
 		return errors.New("unexpected result type from browser")
 	}
 	resultMap := map[string]ResultEntry{}
-	unmarshalErr := json.Unmarshal([]byte(rawStr), &resultMap)
+	unmarshalErr := kukijson.Unmarshal([]byte(rawStr), &resultMap)
 	if unmarshalErr != nil {
 		return fmt.Errorf("parse results: %w", unmarshalErr)
 	}
