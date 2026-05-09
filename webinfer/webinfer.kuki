@@ -73,7 +73,7 @@ func Init() (Env, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/webinfer"
 
 # Cleanup closes the browser and stops the Playwright driver.
-func Cleanup(env Env) error
+func Cleanup(env: Env) error
     return empty
 
 # IsAvailable returns true if Chromium can be found for Playwright.
@@ -81,7 +81,7 @@ func IsAvailable() bool
     return false
 
 # Version returns the onnxruntime-web version string from the loaded page.
-func Version(env Env) string
+func Version(env: Env) string
     return ""
 
 # --- Builder ---
@@ -91,98 +91,98 @@ func New() Config
     return {ep: "wasm"}
 
 # EP sets the execution provider: "webnn", "webgpu", or "wasm".
-func EP(cfg Config, ep string) Config
+func EP(cfg: Config, ep: string) Config
     cfg.ep = ep
     return cfg
 
 # --- Model loading ---
 
 # Load reads an ONNX model file and creates an inference session in the browser.
-func Load(cfg Config, env Env, path string, inputNames list of string, outputNames list of string, inputs list of Tensor, outputs list of Tensor) (Model, error)
+func Load(cfg: Config, env: Env, path: string, inputNames: list of string, outputNames: list of string, inputs: list of Tensor, outputs: list of Tensor) (Model, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/webinfer"
 
 # Close destroys the browser-side inference session.
-func Close(model Model) error
+func Close(model: Model) error
     return empty
 
 # --- Inference ---
 
 # Run executes inference.
-func Run(model Model) error
+func Run(model: Model) error
     return error "stub: use external module github.com/kukichalang/infer/webinfer"
 
 # --- Tensor creation ---
 
 # Shape builds an int64 shape slice from the given dimensions.
-func Shape(many dims int64) list of int64
+func Shape(many dims: int64) list of int64
     return dims
 
 # NewFloat32 creates a float32 tensor with the given shape and data.
-func NewFloat32(shape list of int64, data list of float32) (Tensor, error)
+func NewFloat32(shape: list of int64, data: list of float32) (Tensor, error)
     return {shape: shape, dtype: "float32", float32Data: data}, empty
 
 # ZeroFloat32 creates a zeroed float32 tensor with the given shape.
-func ZeroFloat32(shape list of int64) (Tensor, error)
+func ZeroFloat32(shape: list of int64) (Tensor, error)
     size := 1 as int64
     for d in shape
         size = size * d
     return {shape: shape, dtype: "float32", float32Data: make(list of float32, size)}, empty
 
 # NewInt64 creates an int64 tensor with the given shape and data.
-func NewInt64(shape list of int64, data list of int64) (Tensor, error)
+func NewInt64(shape: list of int64, data: list of int64) (Tensor, error)
     return {shape: shape, dtype: "int64", int64Data: data}, empty
 
 # ZeroInt64 creates a zeroed int64 tensor with the given shape.
-func ZeroInt64(shape list of int64) (Tensor, error)
+func ZeroInt64(shape: list of int64) (Tensor, error)
     size := 1 as int64
     for d in shape
         size = size * d
     return {shape: shape, dtype: "int64", int64Data: make(list of int64, size)}, empty
 
 # Destroy is a no-op for the web backend (GC handles memory).
-func Destroy(tensor Tensor) error
+func Destroy(tensor: Tensor) error
     return empty
 
 # --- Tensor access ---
 
 # GetFloat32 returns the float32 data from a tensor after Run().
-func GetFloat32(tensor Tensor) list of float32
+func GetFloat32(tensor: Tensor) list of float32
     return tensor.float32Data
 
 # GetInt64 returns the int64 data from a tensor.
-func GetInt64(tensor Tensor) list of int64
+func GetInt64(tensor: Tensor) list of int64
     return tensor.int64Data
 
 # GetShape returns the shape dimensions of a tensor.
-func GetShape(tensor Tensor) list of int64
+func GetShape(tensor: Tensor) list of int64
     return tensor.shape
 
 # Dtype returns the data type string of a tensor.
-func Dtype(tensor Tensor) string
+func Dtype(tensor: Tensor) string
     return tensor.dtype
 
 # --- Model inspection ---
 
 # Inspect is not supported by the web backend. Use ort.Inspect instead.
-func Inspect(path string) (ModelInfo, error)
+func Inspect(path: string) (ModelInfo, error)
     return {}, error "webinfer: model inspection not supported (use ort.Inspect)"
 
 # InputNames returns the input names from a ModelInfo.
-func InputNames(info ModelInfo) list of string
+func InputNames(info: ModelInfo) list of string
     return info.inputs |> slice.Map(i => i.Name)
 
 # OutputNames returns the output names from a ModelInfo.
-func OutputNames(info ModelInfo) list of string
+func OutputNames(info: ModelInfo) list of string
     return info.outputs |> slice.Map(i => i.Name)
 
 # GraphName returns the graph name from a ModelInfo.
-func GraphName(info ModelInfo) string
+func GraphName(info: ModelInfo) string
     return info.graphName
 
 # Inputs returns the input IOInfo list from a ModelInfo.
-func Inputs(info ModelInfo) list of IOInfo
+func Inputs(info: ModelInfo) list of IOInfo
     return info.inputs
 
 # Outputs returns the output IOInfo list from a ModelInfo.
-func Outputs(info ModelInfo) list of IOInfo
+func Outputs(info: ModelInfo) list of IOInfo
     return info.outputs

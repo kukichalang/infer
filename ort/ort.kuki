@@ -91,11 +91,11 @@ func Init() (Env, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/ort"
 
 # InitWithPath initializes ONNX Runtime using an explicit shared library path.
-func InitWithPath(path string) (Env, error)
+func InitWithPath(path: string) (Env, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/ort"
 
 # Cleanup destroys the ONNX Runtime environment.
-func Cleanup(env Env) error
+func Cleanup(env: Env) error
     return empty
 
 # IsAvailable returns true if the ONNX Runtime environment is initialized.
@@ -113,27 +113,27 @@ func New() Config
     return {}
 
 # Threads sets the intra-op thread count.
-func Threads(cfg Config, n int) Config
+func Threads(cfg: Config, n: int) Config
     cfg.numThreads = n
     return cfg
 
 # InterOpThreads sets the inter-op thread count.
-func InterOpThreads(cfg Config, n int) Config
+func InterOpThreads(cfg: Config, n: int) Config
     cfg.interOpThreads = n
     return cfg
 
 # OptLevel sets the graph optimization level (0=disabled, 1=basic, 2=extended, 99=all).
-func OptLevel(cfg Config, level int) Config
+func OptLevel(cfg: Config, level: int) Config
     cfg.optimizationLevel = level
     return cfg
 
 # EP sets the execution provider by name.
-func EP(cfg Config, name string) Config
+func EP(cfg: Config, name: string) Config
     cfg.epName = name
     return cfg
 
 # EPWithOptions sets an execution provider with provider-specific options.
-func EPWithOptions(cfg Config, name string, options map of string to string) Config
+func EPWithOptions(cfg: Config, name: string, options: map of string to string) Config
     cfg.epName = name
     cfg.epOptions = options
     return cfg
@@ -141,85 +141,85 @@ func EPWithOptions(cfg Config, name string, options map of string to string) Con
 # --- Model loading ---
 
 # Load creates an AdvancedSession from a model file with pre-allocated tensors.
-func Load(cfg Config, path string, inputNames list of string, outputNames list of string, inputs list of Tensor, outputs list of Tensor) (Model, error)
+func Load(cfg: Config, path: string, inputNames: list of string, outputNames: list of string, inputs: list of Tensor, outputs: list of Tensor) (Model, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/ort"
 
 # Close destroys the model session and frees resources.
-func Close(model Model) error
+func Close(model: Model) error
     return empty
 
 # --- Inference ---
 
 # Run executes inference on the model.
-func Run(model Model) error
+func Run(model: Model) error
     return error "stub: use external module github.com/kukichalang/infer/ort"
 
 # --- Tensor creation ---
 
 # Shape builds an int64 shape slice from the given dimensions.
-func Shape(many dims int64) list of int64
+func Shape(many dims: int64) list of int64
     return dims
 
 # NewFloat32 creates a float32 tensor with the given shape and data.
-func NewFloat32(shape list of int64, data list of float32) (Tensor, error)
+func NewFloat32(shape: list of int64, data: list of float32) (Tensor, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/ort"
 
 # ZeroFloat32 creates a zeroed float32 tensor with the given shape.
-func ZeroFloat32(shape list of int64) (Tensor, error)
+func ZeroFloat32(shape: list of int64) (Tensor, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/ort"
 
 # NewInt64 creates an int64 tensor with the given shape and data.
-func NewInt64(shape list of int64, data list of int64) (Tensor, error)
+func NewInt64(shape: list of int64, data: list of int64) (Tensor, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/ort"
 
 # ZeroInt64 creates a zeroed int64 tensor with the given shape.
-func ZeroInt64(shape list of int64) (Tensor, error)
+func ZeroInt64(shape: list of int64) (Tensor, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/ort"
 
 # Destroy releases the underlying tensor memory.
-func Destroy(tensor Tensor) error
+func Destroy(tensor: Tensor) error
     return empty
 
 # --- Tensor access ---
 
 # GetFloat32 returns the float32 data from a tensor.
-func GetFloat32(tensor Tensor) list of float32
+func GetFloat32(tensor: Tensor) list of float32
     return tensor.float32Data
 
 # GetInt64 returns the int64 data from a tensor.
-func GetInt64(tensor Tensor) list of int64
+func GetInt64(tensor: Tensor) list of int64
     return tensor.int64Data
 
 # GetShape returns the shape dimensions of a tensor.
-func GetShape(tensor Tensor) list of int64
+func GetShape(tensor: Tensor) list of int64
     return tensor.shape
 
 # Dtype returns the data type string of a tensor ("float32", "int64", etc).
-func Dtype(tensor Tensor) string
+func Dtype(tensor: Tensor) string
     return tensor.dtype
 
 # --- Model inspection ---
 
 # Inspect reads model metadata and input/output info from an ONNX file.
-func Inspect(path string) (ModelInfo, error)
+func Inspect(path: string) (ModelInfo, error)
     return {}, error "stub: use external module github.com/kukichalang/infer/ort"
 
 # InputNames returns the input names from a ModelInfo.
-func InputNames(info ModelInfo) list of string
+func InputNames(info: ModelInfo) list of string
     return info.inputs |> slice.Map(i => i.Name)
 
 # OutputNames returns the output names from a ModelInfo.
-func OutputNames(info ModelInfo) list of string
+func OutputNames(info: ModelInfo) list of string
     return info.outputs |> slice.Map(i => i.Name)
 
 # GraphName returns the graph name from a ModelInfo.
-func GraphName(info ModelInfo) string
+func GraphName(info: ModelInfo) string
     return info.graphName
 
 # Inputs returns the input IOInfo list from a ModelInfo.
-func Inputs(info ModelInfo) list of IOInfo
+func Inputs(info: ModelInfo) list of IOInfo
     return info.inputs
 
 # Outputs returns the output IOInfo list from a ModelInfo.
-func Outputs(info ModelInfo) list of IOInfo
+func Outputs(info: ModelInfo) list of IOInfo
     return info.outputs
