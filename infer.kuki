@@ -12,7 +12,7 @@
 #   env := infer.Init() onerr panic "no inference: {error}"
 #   defer infer.Cleanup(env)
 #
-#   print("Backend: {infer.Backend(env)}")
+#   print("Backend: {infer.GetBackend(env)}")
 #
 #   input := infer.NewFloat32(env, infer.Shape(1, 10), data) onerr panic "{error}"
 #   output := infer.ZeroFloat32(env, infer.Shape(1, 5)) onerr panic "{error}"
@@ -34,9 +34,16 @@ import "stdlib/ort"
 import "stdlib/slice"
 import "stdlib/webinfer"
 
+# Backend is the closed set of inference backends. Native uses the ORT C
+# library; Web uses browser-based onnxruntime-web. ParseBackend validates
+# the string form supplied to InitWith.
+enum Backend: string
+    Native = "native"
+    Web = "web"
+
 # Env holds the active backend and its environment handle.
 type Env
-    backend string
+    backend Backend
     nativeEnv any
     webEnv any
 
@@ -50,13 +57,13 @@ type Config
 
 # Model wraps a backend-specific model with a backend tag.
 type Model
-    backend string
+    backend Backend
     nativeModel any
     webModel any
 
 # Tensor wraps a backend-specific tensor with dtype/shape/data refs.
 type Tensor
-    backend string
+    backend Backend
     nativeTensor any
     webTensor any
     dtype string
@@ -83,45 +90,46 @@ type IOInfo
 func Init() (Env, error)
     nEnv, nErr := ort.Init()
     if nErr equals empty
-        return {backend: "native", nativeEnv: nEnv}, empty
+        return {backend: Backend.Native, nativeEnv: nEnv}, empty
     wEnv, wErr := webinfer.Init()
     if wErr equals empty
-        return {backend: "web", webEnv: wEnv}, empty
+        return {backend: Backend.Web, webEnv: wEnv}, empty
     return {}, error "no inference backend available (native: {nErr}, web: {wErr})"
 
 # InitWith creates an Env using an explicit backend ("native" or "web").
 func InitWith(backend: string) (Env, error)
-    if backend equals "native"
+    b, ok := ParseBackend(backend)
+    if not ok
+        return {}, error "unknown backend: {backend} (use \"native\" or \"web\")"
+    if b equals Backend.Native
         nEnv, err := ort.Init()
         if err isnt empty
             return {}, errs.Wrap(err, "native backend init")
-        return {backend: "native", nativeEnv: nEnv}, empty
-    if backend equals "web"
-        wEnv, err := webinfer.Init()
-        if err isnt empty
-            return {}, errs.Wrap(err, "web backend init")
-        return {backend: "web", webEnv: wEnv}, empty
-    return {}, error "unknown backend: {backend} (use \"native\" or \"web\")"
+        return {backend: Backend.Native, nativeEnv: nEnv}, empty
+    wEnv, err := webinfer.Init()
+    if err isnt empty
+        return {}, errs.Wrap(err, "web backend init")
+    return {backend: Backend.Web, webEnv: wEnv}, empty
 
 # Cleanup releases the backend environment resources.
 func Cleanup(env: Env) error
-    if env.backend equals "native"
+    if env.backend equals Backend.Native
         nEnv := env.nativeEnv.(ort.Env)
         return ort.Cleanup(nEnv)
-    if env.backend equals "web"
+    if env.backend equals Backend.Web
         wEnv := env.webEnv.(webinfer.Env)
         return webinfer.Cleanup(wEnv)
     return empty
 
-# Backend returns the active backend name ("native" or "web").
-func Backend(env: Env) string
+# GetBackend returns the active backend.
+func GetBackend(env: Env) Backend
     return env.backend
 
 # Version returns the runtime version string for the active backend.
 func Version(env: Env) string
-    if env.backend equals "native"
+    if env.backend equals Backend.Native
         return ort.Version()
-    if env.backend equals "web"
+    if env.backend equals Backend.Web
         wEnv := env.webEnv.(webinfer.Env)
         return webinfer.Version(wEnv)
     return ""
