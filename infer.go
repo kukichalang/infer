@@ -9,11 +9,28 @@ import (
 	"github.com/kukichalang/infer/webinfer"
 )
 
-type Env struct {
-	backend   string
-	nativeEnv any
-	webEnv    any
+type Backend string
+
+const (
+	BackendNative Backend = "native"
+	BackendWeb    Backend = "web"
+)
+
+func ParseBackend(s string) (Backend, bool) {
+	switch Backend(s) {
+	case BackendNative, BackendWeb:
+		return Backend(s), true
+	}
+	return "", false
 }
+
+type Env interface{ isEnv() }
+
+type NativeEnv struct{ env ort.Env }
+type WebEnv struct{ env webinfer.Env }
+
+func (NativeEnv) isEnv() {}
+func (WebEnv) isEnv()    {}
 
 type Config struct {
 	threads        int
@@ -22,21 +39,53 @@ type Config struct {
 	ep             string
 }
 
-type Model struct {
-	backend     string
-	nativeModel any
-	webModel    any
+type Model interface{ isModel() }
+
+type NativeModel struct {
+	session     ort.Model
+	inputNames  []string
+	outputNames []string
 }
 
-type Tensor struct {
-	backend      string
-	nativeTensor any
-	webTensor    any
-	dtype        string
-	shape        []int64
-	float32Data  []float32
-	int64Data    []int64
+type WebModel struct {
+	session     webinfer.Model
+	inputNames  []string
+	outputNames []string
 }
+
+func (NativeModel) isModel() {}
+func (WebModel) isModel()    {}
+
+type Tensor interface{ isTensor() }
+
+type NativeFloat32 struct {
+	value ort.Tensor
+	shape []int64
+	data  []float32
+}
+
+type NativeInt64 struct {
+	value ort.Tensor
+	shape []int64
+	data  []int64
+}
+
+type WebFloat32 struct {
+	value webinfer.Tensor
+	shape []int64
+	data  []float32
+}
+
+type WebInt64 struct {
+	value webinfer.Tensor
+	shape []int64
+	data  []int64
+}
+
+func (NativeFloat32) isTensor() {}
+func (NativeInt64) isTensor()   {}
+func (WebFloat32) isTensor()    {}
+func (WebInt64) isTensor()      {}
 
 type ModelInfo struct {
 	graphName string
@@ -53,58 +102,70 @@ type IOInfo struct {
 func Init() (Env, error) {
 	nEnv, nErr := ort.Init()
 	if nErr == nil {
-		return Env{backend: "native", nativeEnv: nEnv}, nil
+		return NativeEnv{env: nEnv}, nil
 	}
 	wEnv, wErr := webinfer.Init()
 	if wErr == nil {
-		return Env{backend: "web", webEnv: wEnv}, nil
+		return WebEnv{env: wEnv}, nil
 	}
-	return Env{}, errors.New(fmt.Sprintf("no inference backend available (native: %v, web: %v)", nErr, wErr))
+	return nil, errors.New(fmt.Sprintf("no inference backend available (native: %v, web: %v)", nErr, wErr))
 }
 
 func InitWith(backend string) (Env, error) {
 	if backend == "native" {
 		nEnv, err := ort.Init()
 		if err != nil {
-			return Env{}, errors.Wrap(err, "native backend init")
+			return nil, errors.Wrap(err, "native backend init")
 		}
-		return Env{backend: "native", nativeEnv: nEnv}, nil
+		return NativeEnv{env: nEnv}, nil
 	}
 	if backend == "web" {
 		wEnv, err := webinfer.Init()
 		if err != nil {
-			return Env{}, errors.Wrap(err, "web backend init")
+			return nil, errors.Wrap(err, "web backend init")
 		}
-		return Env{backend: "web", webEnv: wEnv}, nil
+		return WebEnv{env: wEnv}, nil
 	}
-	return Env{}, errors.New(fmt.Sprintf("unknown backend: %v (use \"native\" or \"web\")", backend))
+	return nil, errors.New(fmt.Sprintf("unknown backend: %v (use \"native\" or \"web\")", backend))
 }
 
 func Cleanup(env Env) error {
-	if env.backend == "native" {
-		nEnv := env.nativeEnv.(ort.Env)
-		return ort.Cleanup(nEnv)
+	switch e := env.(type) {
+	case NativeEnv:
+		return ort.Cleanup(e.env)
+	case WebEnv:
+		return webinfer.Cleanup(e.env)
+	default:
+		_ = e
+		return nil
 	}
-	if env.backend == "web" {
-		wEnv := env.webEnv.(webinfer.Env)
-		return webinfer.Cleanup(wEnv)
-	}
-	return nil
 }
 
-func Backend(env Env) string {
-	return env.backend
+func GetBackend(env Env) Backend {
+	switch e := env.(type) {
+	case NativeEnv:
+		_ = e
+		return BackendNative
+	case WebEnv:
+		_ = e
+		return BackendWeb
+	default:
+		_ = e
+		return ""
+	}
 }
 
 func Version(env Env) string {
-	if env.backend == "native" {
+	switch e := env.(type) {
+	case NativeEnv:
+		_ = e
 		return ort.Version()
+	case WebEnv:
+		return webinfer.Version(e.env)
+	default:
+		_ = e
+		return ""
 	}
-	if env.backend == "web" {
-		wEnv := env.webEnv.(webinfer.Env)
-		return webinfer.Version(wEnv)
-	}
-	return ""
 }
 
 func IsAvailable() bool {
@@ -144,16 +205,18 @@ func EP(cfg Config, ep string) Config {
 }
 
 func Load(cfg Config, env Env, path string, inputNames []string, outputNames []string, inputs []Tensor, outputs []Tensor) (Model, error) {
-	if env.backend == "native" {
-		return loadNative(cfg, env, path, inputNames, outputNames, inputs, outputs)
+	switch e := env.(type) {
+	case NativeEnv:
+		return loadNative(cfg, e, path, inputNames, outputNames, inputs, outputs)
+	case WebEnv:
+		return loadWeb(cfg, e, path, inputNames, outputNames, inputs, outputs)
+	default:
+		_ = e
+		return nil, errors.New("no backend initialized")
 	}
-	if env.backend == "web" {
-		return loadWeb(cfg, env, path, inputNames, outputNames, inputs, outputs)
-	}
-	return Model{}, errors.New("no backend initialized")
 }
 
-func loadNative(cfg Config, env Env, path string, inputNames []string, outputNames []string, inputs []Tensor, outputs []Tensor) (Model, error) {
+func loadNative(cfg Config, env NativeEnv, path string, inputNames []string, outputNames []string, inputs []Tensor, outputs []Tensor) (Model, error) {
 	nCfg := ort.New()
 	if cfg.threads > 0 {
 		nCfg = ort.Threads(nCfg, cfg.threads)
@@ -169,62 +232,81 @@ func loadNative(cfg Config, env Env, path string, inputNames []string, outputNam
 	}
 	nInputs := make([]ort.Tensor, len(inputs))
 	for i := range len(inputs) {
-		nInputs[i] = inputs[i].nativeTensor.(ort.Tensor)
+		switch t := inputs[i].(type) {
+		case NativeFloat32:
+			nInputs[i] = t.value
+		case NativeInt64:
+			nInputs[i] = t.value
+		}
 	}
 	nOutputs := make([]ort.Tensor, len(outputs))
 	for i := range len(outputs) {
-		nOutputs[i] = outputs[i].nativeTensor.(ort.Tensor)
+		switch t := outputs[i].(type) {
+		case NativeFloat32:
+			nOutputs[i] = t.value
+		case NativeInt64:
+			nOutputs[i] = t.value
+		}
 	}
 	nModel, err := ort.Load(nCfg, path, inputNames, outputNames, nInputs, nOutputs)
 	if err != nil {
-		return Model{}, err
+		return nil, err
 	}
-	return Model{backend: "native", nativeModel: nModel}, nil
+	return NativeModel{session: nModel, inputNames: inputNames, outputNames: outputNames}, nil
 }
 
-func loadWeb(cfg Config, env Env, path string, inputNames []string, outputNames []string, inputs []Tensor, outputs []Tensor) (Model, error) {
+func loadWeb(cfg Config, env WebEnv, path string, inputNames []string, outputNames []string, inputs []Tensor, outputs []Tensor) (Model, error) {
 	wCfg := webinfer.New()
 	if cfg.ep != "" {
 		wCfg = webinfer.EP(wCfg, cfg.ep)
 	}
-	wEnv := env.webEnv.(webinfer.Env)
 	wInputs := make([]webinfer.Tensor, len(inputs))
 	for i := range len(inputs) {
-		wInputs[i] = inputs[i].webTensor.(webinfer.Tensor)
+		switch t := inputs[i].(type) {
+		case WebFloat32:
+			wInputs[i] = t.value
+		case WebInt64:
+			wInputs[i] = t.value
+		}
 	}
 	wOutputs := make([]webinfer.Tensor, len(outputs))
 	for i := range len(outputs) {
-		wOutputs[i] = outputs[i].webTensor.(webinfer.Tensor)
+		switch t := outputs[i].(type) {
+		case WebFloat32:
+			wOutputs[i] = t.value
+		case WebInt64:
+			wOutputs[i] = t.value
+		}
 	}
-	wModel, err := webinfer.Load(wCfg, wEnv, path, inputNames, outputNames, wInputs, wOutputs)
+	wModel, err := webinfer.Load(wCfg, env.env, path, inputNames, outputNames, wInputs, wOutputs)
 	if err != nil {
-		return Model{}, err
+		return nil, err
 	}
-	return Model{backend: "web", webModel: wModel}, nil
+	return WebModel{session: wModel, inputNames: inputNames, outputNames: outputNames}, nil
 }
 
 func Close(model Model) error {
-	if model.backend == "native" {
-		nModel := model.nativeModel.(ort.Model)
-		return ort.Close(nModel)
+	switch m := model.(type) {
+	case NativeModel:
+		return ort.Close(m.session)
+	case WebModel:
+		return webinfer.Close(m.session)
+	default:
+		_ = m
+		return nil
 	}
-	if model.backend == "web" {
-		wModel := model.webModel.(webinfer.Model)
-		return webinfer.Close(wModel)
-	}
-	return nil
 }
 
 func Run(model Model) error {
-	if model.backend == "native" {
-		nModel := model.nativeModel.(ort.Model)
-		return ort.Run(nModel)
+	switch m := model.(type) {
+	case NativeModel:
+		return ort.Run(m.session)
+	case WebModel:
+		return webinfer.Run(m.session)
+	default:
+		_ = m
+		return errors.New("no backend initialized")
 	}
-	if model.backend == "web" {
-		wModel := model.webModel.(webinfer.Model)
-		return webinfer.Run(wModel)
-	}
-	return errors.New("no backend initialized")
 }
 
 func Shape(dims ...int64) []int64 {
@@ -236,125 +318,183 @@ func Shape(dims ...int64) []int64 {
 }
 
 func NewFloat32(env Env, shape []int64, data []float32) (Tensor, error) {
-	if env.backend == "native" {
+	switch e := env.(type) {
+	case NativeEnv:
+		_ = e
 		nt, err := ort.NewFloat32(shape, data)
 		if err != nil {
-			return Tensor{}, err
+			return nil, err
 		}
-		return Tensor{backend: "native", nativeTensor: nt, dtype: "float32", shape: shape, float32Data: data}, nil
-	}
-	if env.backend == "web" {
+		return NativeFloat32{value: nt, shape: shape, data: data}, nil
+	case WebEnv:
+		_ = e
 		wt, err := webinfer.NewFloat32(shape, data)
 		if err != nil {
-			return Tensor{}, err
+			return nil, err
 		}
-		return Tensor{backend: "web", webTensor: wt, dtype: "float32", shape: shape, float32Data: data}, nil
+		return WebFloat32{value: wt, shape: shape, data: data}, nil
+	default:
+		_ = e
+		return nil, errors.New("no backend initialized")
 	}
-	return Tensor{}, errors.New("no backend initialized")
 }
 
 func ZeroFloat32(env Env, shape []int64) (Tensor, error) {
-	if env.backend == "native" {
+	switch e := env.(type) {
+	case NativeEnv:
+		_ = e
 		nt, err := ort.ZeroFloat32(shape)
 		if err != nil {
-			return Tensor{}, err
+			return nil, err
 		}
-		return Tensor{backend: "native", nativeTensor: nt, dtype: "float32", shape: shape, float32Data: ort.GetFloat32(nt)}, nil
-	}
-	if env.backend == "web" {
+		return NativeFloat32{value: nt, shape: shape, data: ort.GetFloat32(nt)}, nil
+	case WebEnv:
+		_ = e
 		wt, err := webinfer.ZeroFloat32(shape)
 		if err != nil {
-			return Tensor{}, err
+			return nil, err
 		}
-		return Tensor{backend: "web", webTensor: wt, dtype: "float32", shape: shape, float32Data: webinfer.GetFloat32(wt)}, nil
+		return WebFloat32{value: wt, shape: shape, data: webinfer.GetFloat32(wt)}, nil
+	default:
+		_ = e
+		return nil, errors.New("no backend initialized")
 	}
-	return Tensor{}, errors.New("no backend initialized")
 }
 
 func NewInt64(env Env, shape []int64, data []int64) (Tensor, error) {
-	if env.backend == "native" {
+	switch e := env.(type) {
+	case NativeEnv:
+		_ = e
 		nt, err := ort.NewInt64(shape, data)
 		if err != nil {
-			return Tensor{}, err
+			return nil, err
 		}
-		return Tensor{backend: "native", nativeTensor: nt, dtype: "int64", shape: shape, int64Data: data}, nil
-	}
-	if env.backend == "web" {
+		return NativeInt64{value: nt, shape: shape, data: data}, nil
+	case WebEnv:
+		_ = e
 		wt, err := webinfer.NewInt64(shape, data)
 		if err != nil {
-			return Tensor{}, err
+			return nil, err
 		}
-		return Tensor{backend: "web", webTensor: wt, dtype: "int64", shape: shape, int64Data: data}, nil
+		return WebInt64{value: wt, shape: shape, data: data}, nil
+	default:
+		_ = e
+		return nil, errors.New("no backend initialized")
 	}
-	return Tensor{}, errors.New("no backend initialized")
 }
 
 func ZeroInt64(env Env, shape []int64) (Tensor, error) {
-	if env.backend == "native" {
+	switch e := env.(type) {
+	case NativeEnv:
+		_ = e
 		nt, err := ort.ZeroInt64(shape)
 		if err != nil {
-			return Tensor{}, err
+			return nil, err
 		}
-		return Tensor{backend: "native", nativeTensor: nt, dtype: "int64", shape: shape, int64Data: ort.GetInt64(nt)}, nil
-	}
-	if env.backend == "web" {
+		return NativeInt64{value: nt, shape: shape, data: ort.GetInt64(nt)}, nil
+	case WebEnv:
+		_ = e
 		wt, err := webinfer.ZeroInt64(shape)
 		if err != nil {
-			return Tensor{}, err
+			return nil, err
 		}
-		return Tensor{backend: "web", webTensor: wt, dtype: "int64", shape: shape, int64Data: webinfer.GetInt64(wt)}, nil
+		return WebInt64{value: wt, shape: shape, data: webinfer.GetInt64(wt)}, nil
+	default:
+		_ = e
+		return nil, errors.New("no backend initialized")
 	}
-	return Tensor{}, errors.New("no backend initialized")
 }
 
 func Destroy(tensor Tensor) error {
-	if tensor.backend == "native" {
-		nt := tensor.nativeTensor.(ort.Tensor)
-		return ort.Destroy(nt)
+	switch t := tensor.(type) {
+	case NativeFloat32:
+		return ort.Destroy(t.value)
+	case NativeInt64:
+		return ort.Destroy(t.value)
+	case WebFloat32:
+		return webinfer.Destroy(t.value)
+	case WebInt64:
+		return webinfer.Destroy(t.value)
+	default:
+		_ = t
+		return nil
 	}
-	if tensor.backend == "web" {
-		wt := tensor.webTensor.(webinfer.Tensor)
-		return webinfer.Destroy(wt)
-	}
-	return nil
 }
 
 func GetFloat32(tensor Tensor) []float32 {
-	if tensor.backend == "native" {
-		nt := tensor.nativeTensor.(ort.Tensor)
-		return ort.GetFloat32(nt)
+	switch t := tensor.(type) {
+	case NativeFloat32:
+		return ort.GetFloat32(t.value)
+	case WebFloat32:
+		return webinfer.GetFloat32(t.value)
+	case NativeInt64:
+		return []float32{}
+	case WebInt64:
+		return []float32{}
+	default:
+		_ = t
+		return []float32{}
 	}
-	if tensor.backend == "web" {
-		wt := tensor.webTensor.(webinfer.Tensor)
-		return webinfer.GetFloat32(wt)
-	}
-	return tensor.float32Data
 }
 
 func GetInt64(tensor Tensor) []int64 {
-	if tensor.backend == "native" {
-		nt := tensor.nativeTensor.(ort.Tensor)
-		return ort.GetInt64(nt)
+	switch t := tensor.(type) {
+	case NativeInt64:
+		return ort.GetInt64(t.value)
+	case WebInt64:
+		return webinfer.GetInt64(t.value)
+	case NativeFloat32:
+		return []int64{}
+	case WebFloat32:
+		return []int64{}
+	default:
+		_ = t
+		return []int64{}
 	}
-	if tensor.backend == "web" {
-		wt := tensor.webTensor.(webinfer.Tensor)
-		return webinfer.GetInt64(wt)
-	}
-	return tensor.int64Data
 }
 
 func GetShape(tensor Tensor) []int64 {
-	return tensor.shape
+	switch t := tensor.(type) {
+	case NativeFloat32:
+		return t.shape
+	case NativeInt64:
+		return t.shape
+	case WebFloat32:
+		return t.shape
+	case WebInt64:
+		return t.shape
+	default:
+		_ = t
+		return []int64{}
+	}
 }
 
 func Dtype(tensor Tensor) string {
-	return tensor.dtype
+	switch t := tensor.(type) {
+	case NativeFloat32:
+		_ = t
+		return "float32"
+	case WebFloat32:
+		_ = t
+		return "float32"
+	case NativeInt64:
+		_ = t
+		return "int64"
+	case WebInt64:
+		_ = t
+		return "int64"
+	default:
+		_ = t
+		return "unknown"
+	}
 }
 
 func Inspect(env Env, path string) (ModelInfo, error) {
-	if env.backend != "native" {
+	e, ok := env.(NativeEnv)
+	if !ok {
 		return ModelInfo{}, errors.New("model inspection requires native backend")
 	}
+	_ = e
 	nInfo, err := ort.Inspect(path)
 	if err != nil {
 		return ModelInfo{}, err

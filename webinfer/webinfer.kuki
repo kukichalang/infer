@@ -46,12 +46,14 @@ type Model
     inputs list of Tensor
     outputs list of Tensor
 
-# Tensor holds tensor data.
-type Tensor
-    shape list of int64
-    dtype string
-    float32Data list of float32
-    int64Data list of int64
+# Tensor is a variant enum holding browser tensor data by dtype.
+enum Tensor
+    Float32
+        shape list of int64
+        data list of float32
+    Int64
+        shape list of int64
+        data list of int64
 
 # ModelInfo holds metadata from model inspection.
 type ModelInfo
@@ -119,25 +121,25 @@ func Shape(many dims: int64) list of int64
 
 # NewFloat32 creates a float32 tensor with the given shape and data.
 func NewFloat32(shape: list of int64, data: list of float32) (Tensor, error)
-    return {shape: shape, dtype: "float32", float32Data: data}, empty
+    return Float32{shape: shape, data: data}, empty
 
 # ZeroFloat32 creates a zeroed float32 tensor with the given shape.
 func ZeroFloat32(shape: list of int64) (Tensor, error)
     size := 1 as int64
     for d in shape
         size = size * d
-    return {shape: shape, dtype: "float32", float32Data: make(list of float32, size)}, empty
+    return Float32{shape: shape, data: make(list of float32, size)}, empty
 
 # NewInt64 creates an int64 tensor with the given shape and data.
 func NewInt64(shape: list of int64, data: list of int64) (Tensor, error)
-    return {shape: shape, dtype: "int64", int64Data: data}, empty
+    return Int64{shape: shape, data: data}, empty
 
 # ZeroInt64 creates a zeroed int64 tensor with the given shape.
 func ZeroInt64(shape: list of int64) (Tensor, error)
     size := 1 as int64
     for d in shape
         size = size * d
-    return {shape: shape, dtype: "int64", int64Data: make(list of int64, size)}, empty
+    return Int64{shape: shape, data: make(list of int64, size)}, empty
 
 # Destroy is a no-op for the web backend (GC handles memory).
 func Destroy(tensor: Tensor) error
@@ -147,19 +149,35 @@ func Destroy(tensor: Tensor) error
 
 # GetFloat32 returns the float32 data from a tensor after Run().
 func GetFloat32(tensor: Tensor) list of float32
-    return tensor.float32Data
+    switch tensor as t
+        when Float32
+            return t.data
+        when Int64
+            return list of float32{}
 
 # GetInt64 returns the int64 data from a tensor.
 func GetInt64(tensor: Tensor) list of int64
-    return tensor.int64Data
+    switch tensor as t
+        when Float32
+            return list of int64{}
+        when Int64
+            return t.data
 
 # GetShape returns the shape dimensions of a tensor.
 func GetShape(tensor: Tensor) list of int64
-    return tensor.shape
+    switch tensor as t
+        when Float32
+            return t.shape
+        when Int64
+            return t.shape
 
 # Dtype returns the data type string of a tensor.
 func Dtype(tensor: Tensor) string
-    return tensor.dtype
+    switch tensor as t
+        when Float32
+            return "float32"
+        when Int64
+            return "int64"
 
 # --- Model inspection ---
 

@@ -36,12 +36,20 @@ type Model struct {
 	outputs     []Tensor
 }
 
-type Tensor struct {
-	shape       []int64
-	dtype       string
-	float32Data []float32
-	int64Data   []int64
+type Tensor interface{ isTensor() }
+
+type Float32 struct {
+	shape []int64
+	data  []float32
 }
+
+type Int64 struct {
+	shape []int64
+	data  []int64
+}
+
+func (Float32) isTensor() {}
+func (Int64) isTensor()   {}
 
 type ModelInfo struct {
 	graphName string
@@ -174,8 +182,16 @@ func Run(model Model) error {
 	for i := range len(model.inputNames) {
 		name := model.inputNames[i]
 		if i < len(model.inputs) {
-			t := model.inputs[i]
-			feeds[name] = FeedEntry{Dtype: "float32", Shape: t.shape, Data: t.float32Data}
+			switch t := model.inputs[i].(type) {
+			case Float32:
+				feeds[name] = FeedEntry{Dtype: "float32", Shape: t.shape, Data: t.data}
+			case Int64:
+				f32 := make([]float32, len(t.data))
+				for j, v := range t.data {
+					f32[j] = float32(v)
+				}
+				feeds[name] = FeedEntry{Dtype: "int64", Shape: t.shape, Data: f32}
+			}
 		}
 	}
 	feedsJSON, marshalErr := kukijson.Marshal(feeds)
@@ -202,9 +218,20 @@ func Run(model Model) error {
 		if i < len(model.outputs) {
 			r, rok := resultMap[name]
 			if rok {
-				model.outputs[i].float32Data = r.Data
-				model.outputs[i].shape = r.Shape
-				model.outputs[i].dtype = r.Dtype
+				switch t := model.outputs[i].(type) {
+				case Float32:
+					t.data = r.Data
+					t.shape = r.Shape
+					model.outputs[i] = t
+				case Int64:
+					i64 := make([]int64, len(r.Data))
+					for j, v := range r.Data {
+						i64[j] = int64(v)
+					}
+					t.data = i64
+					t.shape = r.Shape
+					model.outputs[i] = t
+				}
 			}
 		}
 	}
@@ -220,7 +247,7 @@ func Shape(dims ...int64) []int64 {
 }
 
 func NewFloat32(shape []int64, data []float32) (Tensor, error) {
-	return Tensor{shape: shape, dtype: "float32", float32Data: data}, nil
+	return Float32{shape: shape, data: data}, nil
 }
 
 func ZeroFloat32(shape []int64) (Tensor, error) {
@@ -228,11 +255,11 @@ func ZeroFloat32(shape []int64) (Tensor, error) {
 	for _, d := range shape {
 		size = (size * d)
 	}
-	return Tensor{shape: shape, dtype: "float32", float32Data: make([]float32, size)}, nil
+	return Float32{shape: shape, data: make([]float32, size)}, nil
 }
 
 func NewInt64(shape []int64, data []int64) (Tensor, error) {
-	return Tensor{shape: shape, dtype: "int64", int64Data: data}, nil
+	return Int64{shape: shape, data: data}, nil
 }
 
 func ZeroInt64(shape []int64) (Tensor, error) {
@@ -240,7 +267,7 @@ func ZeroInt64(shape []int64) (Tensor, error) {
 	for _, d := range shape {
 		size = (size * d)
 	}
-	return Tensor{shape: shape, dtype: "int64", int64Data: make([]int64, size)}, nil
+	return Int64{shape: shape, data: make([]int64, size)}, nil
 }
 
 func Destroy(tensor Tensor) error {
@@ -248,19 +275,51 @@ func Destroy(tensor Tensor) error {
 }
 
 func GetFloat32(tensor Tensor) []float32 {
-	return tensor.float32Data
+	switch t := tensor.(type) {
+	case Float32:
+		return t.data
+	case Int64:
+		return []float32{}
+	default:
+		_ = t
+		return []float32{}
+	}
 }
 
 func GetInt64(tensor Tensor) []int64 {
-	return tensor.int64Data
+	switch t := tensor.(type) {
+	case Float32:
+		return []int64{}
+	case Int64:
+		return t.data
+	default:
+		_ = t
+		return []int64{}
+	}
 }
 
 func GetShape(tensor Tensor) []int64 {
-	return tensor.shape
+	switch t := tensor.(type) {
+	case Float32:
+		return t.shape
+	case Int64:
+		return t.shape
+	default:
+		_ = t
+		return []int64{}
+	}
 }
 
 func Dtype(tensor Tensor) string {
-	return tensor.dtype
+	switch t := tensor.(type) {
+	case Float32:
+		return "float32"
+	case Int64:
+		return "int64"
+	default:
+		_ = t
+		return "unknown"
+	}
 }
 
 func Inspect(path string) (ModelInfo, error) {

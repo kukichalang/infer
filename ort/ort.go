@@ -27,13 +27,22 @@ type Model struct {
 	outputNames []string
 }
 
-type Tensor struct {
-	value       any
-	dtype       string
-	shape       []int64
-	float32Data []float32
-	int64Data   []int64
+type Tensor interface{ isTensor() }
+
+type Float32 struct {
+	value any
+	shape []int64
+	data  []float32
 }
+
+type Int64 struct {
+	value any
+	shape []int64
+	data  []int64
+}
+
+func (Float32) isTensor() {}
+func (Int64) isTensor()   {}
 
 type ModelInfo struct {
 	graphName string
@@ -168,11 +177,21 @@ func Load(cfg Config, path string, inputNames []string, outputNames []string, in
 	}
 	ortInputs := make([]ort.Value, len(inputs))
 	for i := range len(inputs) {
-		ortInputs[i] = inputs[i].value.(ort.Value)
+		switch t := inputs[i].(type) {
+		case Float32:
+			ortInputs[i] = t.value.(ort.Value)
+		case Int64:
+			ortInputs[i] = t.value.(ort.Value)
+		}
 	}
 	ortOutputs := make([]ort.Value, len(outputs))
 	for i := range len(outputs) {
-		ortOutputs[i] = outputs[i].value.(ort.Value)
+		switch t := outputs[i].(type) {
+		case Float32:
+			ortOutputs[i] = t.value.(ort.Value)
+		case Int64:
+			ortOutputs[i] = t.value.(ort.Value)
+		}
 	}
 	session, sessErr := ort.NewAdvancedSession(path, inputNames, outputNames, ortInputs, ortOutputs, opts)
 	if sessErr != nil {
@@ -218,9 +237,9 @@ func NewFloat32(shape []int64, data []float32) (Tensor, error) {
 	ortShape := ort.NewShape(shape...)
 	t, err := ort.NewTensor(ortShape, data)
 	if err != nil {
-		return Tensor{}, errors.Wrap(err, "new float32 tensor")
+		return nil, errors.Wrap(err, "new float32 tensor")
 	}
-	return Tensor{value: t, dtype: "float32", shape: shape, float32Data: data}, nil
+	return Float32{value: t, shape: shape, data: data}, nil
 }
 
 func ZeroFloat32(shape []int64) (Tensor, error) {
@@ -229,18 +248,18 @@ func ZeroFloat32(shape []int64) (Tensor, error) {
 	data := make([]float32, size)
 	t, err := ort.NewTensor(ortShape, data)
 	if err != nil {
-		return Tensor{}, errors.Wrap(err, "zero float32 tensor")
+		return nil, errors.Wrap(err, "zero float32 tensor")
 	}
-	return Tensor{value: t, dtype: "float32", shape: shape, float32Data: data}, nil
+	return Float32{value: t, shape: shape, data: data}, nil
 }
 
 func NewInt64(shape []int64, data []int64) (Tensor, error) {
 	ortShape := ort.NewShape(shape...)
 	t, err := ort.NewTensor(ortShape, data)
 	if err != nil {
-		return Tensor{}, errors.Wrap(err, "new int64 tensor")
+		return nil, errors.Wrap(err, "new int64 tensor")
 	}
-	return Tensor{value: t, dtype: "int64", shape: shape, int64Data: data}, nil
+	return Int64{value: t, shape: shape, data: data}, nil
 }
 
 func ZeroInt64(shape []int64) (Tensor, error) {
@@ -249,37 +268,81 @@ func ZeroInt64(shape []int64) (Tensor, error) {
 	data := make([]int64, size)
 	t, err := ort.NewTensor(ortShape, data)
 	if err != nil {
-		return Tensor{}, errors.Wrap(err, "zero int64 tensor")
+		return nil, errors.Wrap(err, "zero int64 tensor")
 	}
-	return Tensor{value: t, dtype: "int64", shape: shape, int64Data: data}, nil
+	return Int64{value: t, shape: shape, data: data}, nil
 }
 
 func Destroy(tensor Tensor) error {
-	if tensor.value == nil {
-		return nil
-	}
-	v := tensor.value.(ort.Value)
-	err := v.Destroy()
-	if err != nil {
-		return errors.Wrap(err, "destroy tensor")
+	switch t := tensor.(type) {
+	case Float32:
+		if t.value == nil {
+			return nil
+		}
+		v := t.value.(ort.Value)
+		err := v.Destroy()
+		if err != nil {
+			return errors.Wrap(err, "destroy tensor")
+		}
+	case Int64:
+		if t.value == nil {
+			return nil
+		}
+		v := t.value.(ort.Value)
+		err := v.Destroy()
+		if err != nil {
+			return errors.Wrap(err, "destroy tensor")
+		}
 	}
 	return nil
 }
 
 func GetFloat32(tensor Tensor) []float32 {
-	return tensor.float32Data
+	switch t := tensor.(type) {
+	case Float32:
+		return t.data
+	case Int64:
+		return []float32{}
+	default:
+		_ = t
+		return []float32{}
+	}
 }
 
 func GetInt64(tensor Tensor) []int64 {
-	return tensor.int64Data
+	switch t := tensor.(type) {
+	case Float32:
+		return []int64{}
+	case Int64:
+		return t.data
+	default:
+		_ = t
+		return []int64{}
+	}
 }
 
 func GetShape(tensor Tensor) []int64 {
-	return tensor.shape
+	switch t := tensor.(type) {
+	case Float32:
+		return t.shape
+	case Int64:
+		return t.shape
+	default:
+		_ = t
+		return []int64{}
+	}
 }
 
 func Dtype(tensor Tensor) string {
-	return tensor.dtype
+	switch t := tensor.(type) {
+	case Float32:
+		return "float32"
+	case Int64:
+		return "int64"
+	default:
+		_ = t
+		return "unknown"
+	}
 }
 
 func Inspect(path string) (ModelInfo, error) {

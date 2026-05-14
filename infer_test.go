@@ -84,7 +84,7 @@ func TestInit(t *testing.T) {
 				t.Skip(fmt.Sprintf("no inference backend available: %v", err))
 				return
 			}
-			backend := infer.Backend(env)
+			backend := infer.GetBackend(env)
 			assertTrue(t, ((backend == "native") || (backend == "web")))
 			ver := infer.Version(env)
 			assertTrue(t, (len(ver) > 0))
@@ -123,7 +123,7 @@ func TestInspectWebError(t *testing.T) {
 				return
 			}
 			defer infer.Cleanup(env)
-			assertEqual(t, infer.Backend(env), "web")
+			assertEqual(t, infer.GetBackend(env), infer.BackendWeb)
 			_, inspectErr := infer.Inspect(env, "model.onnx")
 			assertError(t, inspectErr)
 		})
