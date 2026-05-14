@@ -101,25 +101,27 @@ func InitWith(backend: string) (Env, error)
     b, ok := ParseBackend(backend)
     if not ok
         return {}, error "unknown backend: {backend} (use \"native\" or \"web\")"
-    if b equals Backend.Native
-        nEnv, err := ort.Init()
-        if err isnt empty
-            return {}, errs.Wrap(err, "native backend init")
-        return {backend: Backend.Native, nativeEnv: nEnv}, empty
-    wEnv, err := webinfer.Init()
-    if err isnt empty
-        return {}, errs.Wrap(err, "web backend init")
-    return {backend: Backend.Web, webEnv: wEnv}, empty
+    switch b
+        when Backend.Native
+            nEnv, err := ort.Init()
+            if err isnt empty
+                return {}, errs.Wrap(err, "native backend init")
+            return {backend: Backend.Native, nativeEnv: nEnv}, empty
+        when Backend.Web
+            wEnv, err := webinfer.Init()
+            if err isnt empty
+                return {}, errs.Wrap(err, "web backend init")
+            return {backend: Backend.Web, webEnv: wEnv}, empty
 
 # Cleanup releases the backend environment resources.
 func Cleanup(env: Env) error
-    if env.backend equals Backend.Native
-        nEnv := env.nativeEnv.(ort.Env)
-        return ort.Cleanup(nEnv)
-    if env.backend equals Backend.Web
-        wEnv := env.webEnv.(webinfer.Env)
-        return webinfer.Cleanup(wEnv)
-    return empty
+    switch env.backend
+        when Backend.Native
+            nEnv := env.nativeEnv.(ort.Env)
+            return ort.Cleanup(nEnv)
+        when Backend.Web
+            wEnv := env.webEnv.(webinfer.Env)
+            return webinfer.Cleanup(wEnv)
 
 # GetBackend returns the active backend.
 func GetBackend(env: Env) Backend
@@ -127,12 +129,12 @@ func GetBackend(env: Env) Backend
 
 # Version returns the runtime version string for the active backend.
 func Version(env: Env) string
-    if env.backend equals Backend.Native
-        return ort.Version()
-    if env.backend equals Backend.Web
-        wEnv := env.webEnv.(webinfer.Env)
-        return webinfer.Version(wEnv)
-    return ""
+    switch env.backend
+        when Backend.Native
+            return ort.Version()
+        when Backend.Web
+            wEnv := env.webEnv.(webinfer.Env)
+            return webinfer.Version(wEnv)
 
 # IsAvailable returns true if any inference backend is available.
 func IsAvailable() bool
